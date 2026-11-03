@@ -34,3 +34,6 @@ jobs:
           git diff --cached --quiet && echo "Изменений нет" && exit 0
           git commit -m "Обновление базы камер $(date -u +%F)"
           git push
+
+      - name: Сбросить кэш jsDelivr, чтобы телефоны сразу получили новую базу
+        run: curl -fsS "https://purge.jsdelivr.net/gh/${{ github.repository }}@main/data/road-objects.json"
