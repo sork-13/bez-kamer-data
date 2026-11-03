@@ -33,6 +33,7 @@ jobs:
           git add data/road-objects.json
           git diff --cached --quiet && echo "Изменений нет" && exit 0
           git commit -m "Обновление базы камер $(date -u +%F)"
+          git pull --rebase origin main
           git push
 
       - name: Сбросить кэш jsDelivr, чтобы телефоны сразу получили новую базу
