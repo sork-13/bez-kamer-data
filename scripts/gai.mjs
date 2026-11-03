@@ -20,6 +20,8 @@ const CAMERA_FILE = /stacion|statsion|fvf|kamer|sredstv[a-z_]*fiks|kompleks|фо
 const MOBILE = /peredvizh|передвиж/i;
 // Общий файл (стационарные и передвижные) часто назван сокращённо: stac., st_i_peredvizh.
 const STATIONARY = /stac|stats|(^|[_\-.])st[_\-.]|стацион/i;
+// Файлы, которые точно не перечни камер (статистика ДТП, доклады, презентации).
+const OTHER_REPORTS = /statist|statitsik|dtp|дтп|статист|prezent|презент|doklad|доклад|otchet|отчет|отчёт/i;
 // Заголовок раздела с передвижными камерами внутри общего файла.
 const MOBILE_SECTION = /передвижн\S*\s+(средств|комплекс|камер)/i;
 
@@ -40,17 +42,27 @@ async function fetchWithRetry(url, asBuffer = false) {
  * и отдельный с передвижными, если регион публикует их отдельно.
  */
 async function findCameraFiles(code) {
-  const html = await fetchWithRetry(`${SITE}/r/${code}/`);
+  // Коды 1-9 на сайте двузначные: /r/07/, а /r/7/ отдаёт 404.
+  const html = await fetchWithRetry(`${SITE}/r/${String(code).padStart(2, '0')}/`);
   if (!html) return [];
   // Ссылки на странице идут от новых к старым.
-  const links = [...html.matchAll(/href="([^"]+\.(pdf|xlsx))"/gi)]
-    .map((m) => m[1])
-    .filter((href) => CAMERA_FILE.test(decodeURIComponent(href)) || MOBILE.test(decodeURIComponent(href)));
+  const allLinks = [...html.matchAll(/href="([^"]+\.(pdf|xlsx))"/gi)].map((m) => m[1]);
+  const links = allLinks.filter(
+    (href) => CAMERA_FILE.test(decodeURIComponent(href)) || MOBILE.test(decodeURIComponent(href)),
+  );
   const name = (href) => decodeURIComponent(href);
   // Первым на странице иногда стоит короткое дополнение, поэтому берём по 3 свежих кандидата,
   // а из них потом выбираем файл с наибольшим числом камер.
   const main = links.filter((href) => !MOBILE.test(name(href)) || STATIONARY.test(name(href))).slice(0, 3);
   const mobile = links.filter((href) => MOBILE.test(name(href)) && !STATIONARY.test(name(href))).slice(0, 3);
+  // Некоторые регионы называют файл просто датой («30.10.2026.xlsx»). Если по названию
+  // ничего не нашлось, проверяем свежие файлы региона по содержимому (strict: см. fetchGaiCameras).
+  if (!main.length) {
+    const unnamed = allLinks
+      .filter((href) => href.includes(`/site${code}/`) && !OTHER_REPORTS.test(name(href)))
+      .slice(0, 3);
+    if (unnamed.length) return [{ urls: unnamed.map((href) => new URL(href, SITE).href), mobile: false, strict: true }];
+  }
   return [
     main.length && { urls: main.map((href) => new URL(href, SITE).href), mobile: false },
     mobile.length && { urls: mobile.map((href) => new URL(href, SITE).href), mobile: true },
@@ -143,6 +155,10 @@ export async function fetchGaiCameras(log = console.log) {
           const buffer = await fetchWithRetry(url, true);
           if (!buffer) continue;
           const parsed = /\.xlsx$/i.test(url) ? await parseXlsx(buffer) : parseText(await pdfToText(buffer));
+          // Файл, найденный не по названию, принимаем, только если это явно таблица камер:
+          // хотя бы 5 точек, и у большинства распознаны виды нарушений.
+          const looksLikeCameras = parsed.length >= 5 && parsed.filter((r) => r.features).length >= parsed.length / 2;
+          if (file.strict && !looksLikeCameras) continue;
           if (parsed.length > records.length) {
             records = parsed;
             file.url = url;
