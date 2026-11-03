@@ -1,0 +1,12 @@
+{
+  "name": "bez-kamer-data",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "node scripts/build-db.mjs"
+  },
+  "dependencies": {
+    "pdfjs-dist": "^4.10.38",
+    "read-excel-file": "^5.8.0"
+  }
+}

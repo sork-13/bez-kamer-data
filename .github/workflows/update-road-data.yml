@@ -1,5 +1,5 @@
-# Каждую ночь заново скачивает камеры, посты и платные дороги по всей России
-# из OpenStreetMap и сохраняет data/road-objects.json в репозиторий.
+# Каждую ночь заново собирает камеры, посты и платные дороги по всей России
+# из OpenStreetMap и официальных перечней Госавтоинспекции и сохраняет data/road-objects.json в репозиторий.
 # Приложение забирает этот файл по адресу из EXPO_PUBLIC_ROAD_DATA_URL, например:
 # https://cdn.jsdelivr.net/gh/<аккаунт>/<репозиторий>@main/data/road-objects.json
 name: Обновление базы камер
@@ -23,8 +23,11 @@ jobs:
         with:
           node-version: 24
 
-      - name: Скачать данные OpenStreetMap
-        run: node scripts/import-osm.mjs
+      - name: Установить библиотеки для чтения PDF и Excel
+        run: npm ci
+
+      - name: Собрать базу из OpenStreetMap и перечней Госавтоинспекции
+        run: node scripts/build-db.mjs
 
       - name: Сохранить, если что-то изменилось
         run: |
